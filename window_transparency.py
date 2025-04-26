@@ -8,15 +8,19 @@ class WindowTransparency:
     def __init__(self):
         self.windows = []
         self.selected_window = None
-        self.config_file = os.path.join(os.path.dirname(__file__), 'transparency_config.json')
+        self.config_file = os.path.join(os.getenv('APPDATA'), 'TransWin', 'TransWin_config.json')
         
         # 创建主窗口
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
         self.root = ctk.CTk()
-        self.root.title("窗口透明度调节工具")
+        self.root.title("TransWin by.MTpupil")
         self.root.geometry("400x500")
+        # 设置窗口图标，如果不存在则使用默认
+        icon_path = os.path.join(os.path.dirname(__file__), "logo.ico")
+        if os.path.exists(icon_path):
+            self.root.iconbitmap(icon_path)
         
         # 窗口列表
         self.window_label = ctk.CTkLabel(self.root, text="选择窗口")
