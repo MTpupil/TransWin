@@ -1,9 +1,10 @@
 import customtkinter as ctk
 import win32gui
 import win32con
+import win32process
 import json
 import os
-
+import psutil
 
 from pynput import mouse, keyboard
 import threading
@@ -109,17 +110,35 @@ class WindowTransparency:
                 if not (style & (win32con.WS_OVERLAPPED | win32con.WS_POPUP)):
                     title = win32gui.GetWindowText(hwnd)
                     if title:
-                        self.windows.append({"hwnd": hwnd, "title": title})
-                        label = ctk.CTkLabel(self.window_frame, text=title, cursor="hand2")
-                        label.pack(fill="x", pady=2)
-                        label.bind("<Button-1>", lambda e, h=hwnd, t=title: self.on_window_click(h, t))
-                        self.window_list_labels.append(label)
+                        try:
+                            # 获取进程ID和可执行文件路径
+                            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                            process = psutil.Process(pid)
+                            exe_path = process.exe()
+                            
+                            self.windows.append({
+                                "hwnd": hwnd,
+                                "title": title,
+                                "pid": pid,
+                                "exe_path": exe_path
+                            })
+                            label = ctk.CTkLabel(self.window_frame, text=title, cursor="hand2")
+                            label.pack(fill="x", pady=2)
+                            label.bind("<Button-1>", lambda e, h=hwnd, t=title, p=pid, ep=exe_path: self.on_window_click(h, t, p, ep))
+                            self.window_list_labels.append(label)
+                        except:
+                            pass
         
         win32gui.EnumWindows(enum_windows_callback, None)
     
-    def on_window_click(self, hwnd, title):
+    def on_window_click(self, hwnd, title, pid, exe_path):
         """窗口点击事件"""
-        self.selected_window = {"hwnd": hwnd, "title": title}
+        self.selected_window = {
+            "hwnd": hwnd,
+            "title": title,
+            "pid": pid,
+            "exe_path": exe_path
+        }
         self.window_label.configure(text=f"当前窗口: {title}")
         
         # 检查是否有该窗口的透明度记录
@@ -127,9 +146,12 @@ class WindowTransparency:
             try:
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    if "windows" in config and str(hwnd) in config["windows"]:
-                        self.transparency_scale.set(config["windows"][str(hwnd)]["transparency"])
-                        return
+                    if "windows" in config:
+                        # 首先尝试通过可执行文件路径匹配
+                        for window_info in config["windows"].values():
+                            if window_info.get("exe_path") == exe_path:
+                                self.transparency_scale.set(window_info["transparency"])
+                                return
             except:
                 pass
         
@@ -177,7 +199,9 @@ class WindowTransparency:
             hwnd = str(self.selected_window["hwnd"])
             config["windows"][hwnd] = {
                 "title": self.selected_window["title"],
-                "transparency": float(self.transparency_scale.get())
+                "transparency": float(self.transparency_scale.get()),
+                "pid": self.selected_window["pid"],
+                "exe_path": self.selected_window["exe_path"]
             }
         
         # 保存热键开关状态
@@ -279,18 +303,32 @@ class WindowTransparency:
                     if not target_hwnd:
                         target_hwnd = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
                     
-                    current_value = self.transparency_scale.get()
-                    if dy > 0:
-                        new_value = min(1.0, current_value + 0.05)
-                    else:
-                        new_value = max(0.1, current_value - 0.05)
-                    
-                    self.selected_window = {"hwnd": target_hwnd, "title": win32gui.GetWindowText(target_hwnd)}
-                    self.window_label.configure(text=f"当前窗口: {win32gui.GetWindowText(target_hwnd)}")
-                    self.transparency_scale.set(new_value)
-                    self.set_transparency(new_value)
-                    # 清除选中的窗口，这样下次滚轮时会重新获取鼠标位置下的窗口
-                    self.selected_window = None
+                    try:
+                        # 获取进程ID和可执行文件路径
+                        _, pid = win32process.GetWindowThreadProcessId(target_hwnd)
+                        process = psutil.Process(pid)
+                        exe_path = process.exe()
+                        title = win32gui.GetWindowText(target_hwnd)
+                        
+                        current_value = self.transparency_scale.get()
+                        if dy > 0:
+                            new_value = min(1.0, current_value + 0.05)
+                        else:
+                            new_value = max(0.1, current_value - 0.05)
+                        
+                        self.selected_window = {
+                            "hwnd": target_hwnd,
+                            "title": title,
+                            "pid": pid,
+                            "exe_path": exe_path
+                        }
+                        self.window_label.configure(text=f"当前窗口: {title}")
+                        self.transparency_scale.set(new_value)
+                        self.set_transparency(new_value)
+                        # 清除选中的窗口，这样下次滚轮时会重新获取鼠标位置下的窗口
+                        self.selected_window = None
+                    except:
+                        pass
         
         def on_press(key):
             if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
