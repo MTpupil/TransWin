@@ -146,12 +146,6 @@ class WindowTransparency:
                 
                 # 设置窗口样式
                 style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-                # 清除之前的WS_EX_TRANSPARENT样式
-                style &= ~win32con.WS_EX_TRANSPARENT
-                # 当透明度低于等于15%时，启用鼠标穿透
-                if percentage <= 15:
-                    style |= win32con.WS_EX_TRANSPARENT
-                
                 # 设置窗口样式和透明度
                 win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, style | win32con.WS_EX_LAYERED)
                 win32gui.SetLayeredWindowAttributes(hwnd, 0, alpha, win32con.LWA_ALPHA)
